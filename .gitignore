@@ -1,0 +1,13 @@
+# Ignore study and material folders
+CKAD - Leo/
+Killershell/
+KodeKloud material/
+
+# Ignore all CKAD exam tip files
+tips_exam_ckad*.yml
+
+# Others
+answer_questions_practice_lab.sh
+answer_questions_practice_lab_v2.sh
+Setup_practice_lab.sh
+validate.sh
