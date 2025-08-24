@@ -1,0 +1,161 @@
+# =================================================================
+# CKAD Exam Practice Questions (v3.3 - Final with Explicit Names)
+# =================================================================
+
+# =================================================================
+# Section 1: Core Application Concepts
+# =================================================================
+
+- id: 1
+  context: You are asked to implement a canary deployment for a new application release. A service named `web-srv` in the `tiger` namespace points to a `blue` deployment. Your task is to introduce a new version of the application using a canary deployment.
+  tasks:
+    - The setup script has already created the `blue` deployment. Your task is to create the canary.
+    - Create a new Deployment named `canary-green-deployment` in the `tiger` namespace.
+    - It should have 4 replicas and use the image `nginx:1.27.0`.
+    - Ensure its pods are labeled with `tier: web` so the existing `web-srv` service sends traffic to them.
+    - The total number of pods for the application should now be 10 (6 from `blue`, 4 from `canary-green`).
+
+- id: 2
+  context: You need to control traffic flow between pods in the `ckad-netpol` namespace using a NetworkPolicy.
+  tasks:
+    - Create a NetworkPolicy named `db-policy`.
+    - It should target pods with the label `run=db`.
+    - The policy must allow ingress traffic to the `db` pods ONLY from pods with the label `run=web`.
+
+- id: 3
+  context: A user has reported that the application exposed via an Ingress resource in the `external` namespace is not reachable.
+  tasks:
+    - Inspect the Ingress, Services, and Pods in the `external` namespace to find the source of the issue.
+    - Fix the problem so that the application is accessible.
+
+- id: 4
+  context: You must fix a permission issue for a ServiceAccount.
+  tasks:
+    - A pod within the deployment `log-reader-deploy` in the `dev` namespace is failing because its ServiceAccount (`log-reader-sa`) lacks permissions.
+    - Create a Role named `pod-reader-role` and a RoleBinding named `log-reader-binding`.
+    - This should grant the `log-reader-sa` ServiceAccount permission to `get`, `list`, and `watch` pods within the `dev` namespace.
+
+- id: 5
+  context: none (this task is outside the cluster)
+  prompt: You must build and export container images from a Dockerfile.
+  tasks:
+    - A Dockerfile has been provided at `/opt/course/docker-build/Dockerfile`.
+    - Using the provided Dockerfile, build a container image with the name `macque` and tag `3.0`.
+    - Export the built image and store it at `/opt/course/docker-build/macque3.0.tar`.
+
+- id: 6
+  context: The existing pod `probe-pod` needs a readiness probe to ensure traffic is only sent to it after it's ready.
+  tasks:
+    - Modify the `probe-pod` to add a readiness probe.
+    - The probe should execute a command (`exec`) that runs `cat /tmp/started`.
+    - It should have an initial delay of 5 seconds and probe every 5 seconds.
+    - You will need to add a command to the container that creates the file (`touch /tmp/started`) for the probe to succeed.
+
+- id: 7
+  context: Your team needs to ensure that a pod is only scheduled to a node with sufficient resources.
+  tasks:
+    - Create a pod named `nginx-resources` in the `pod-resources` namespace.
+    - Configure the pod to request a minimum of 200m CPU and 1Gi of memory for its container.
+    - The pod should use the `nginx` container image.
+
+- id: 8
+  context: You must modify the existing `broker-deployment` in the `quetzal` namespace to meet new security requirements.
+  tasks:
+    - Configure the pods in the deployment to run with a user ID of 30000 (`runAsUser`).
+    - Ensure that privilege escalation is forbidden (`allowPrivilegeEscalation: false`) for the containers.
+
+- id: 9
+  context: A manifest file contains a deprecated API version that must be fixed for a new cluster.
+  tasks:
+    - A manifest file at `/opt/course/9/www.yaml` contains a deprecated apiVersion for a Deployment.
+    - Fix the API version in that manifest file.
+    - Deploy the application in the `cobra` namespace using the corrected file.
+
+- id: 10
+  context: You need to perform a rolling update of a deployment and later roll it back to a previous version.
+  tasks:
+    - Perform a rolling update of the `app-deployment` in the `kdpd00202` namespace by changing its container image to `nginx:1.13`.
+    - After verifying the update, roll back the `app-deployment` to the previous version.
+
+- id: 11
+  context: You need to create a CronJob that runs a task periodically.
+  tasks:
+    - In the `periodic-jobs` namespace, create a CronJob named `hello`.
+    - The job should run every minute (`*/1 * * * *`).
+    - It should use the `busybox` image and run the `date` command.
+    - The job must be terminated if it does not complete within 22 seconds (`activeDeadlineSeconds`).
+
+# =================================================================
+# Section 5: Job & CronJob Management
+# =================================================================
+
+- id: 12
+  context: Team Neptune needs a Job that runs a task a specific number of times in parallel.
+  tasks:
+    - Create a Job named `neb-new-job` in the `neptune` namespace.
+    - It should run the command `sleep 2 && echo done` using the `busybox:1.31.0` image.
+    - The Job must run to completion a total of 3 times (`completions: 3`).
+    - It should run with a maximum of 2 pods in parallel (`parallelism: 2`).
+
+- id: 13
+  context: The single Pod `holy-api` in the `pluto` namespace is not reliable. Convert it into a Deployment.
+  tasks:
+    - Create a Deployment named `holy-api` in the `pluto` namespace.
+    - The Deployment should have 3 replicas and manage pods with the `nginx:1.17.3-alpine` image.
+    - After the Deployment is running, delete the original `holy-api` Pod.
+
+- id: 14
+  context: You need to set up a `ClusterIP` Service to expose a single Pod internally and then confirm the connection.
+  tasks:
+    - Create a single Pod named `project-plt-6cc-api` with the image `nginx:1.17.3-alpine` in the `pluto` namespace.
+    - Expose the Pod with a ClusterIP Service named `project-plt-6cc-svc` that maps port `3333` to the container's port `80`.
+    - From a temporary pod, curl the service and save the output to `/opt/course/10/service_test.html`.
+    - Save the logs of the `project-plt-6cc-api` pod to `/opt/course/10/service_test.log`.
+
+- id: 15
+  context: You need to add a sidecar container to the existing `cleaner` Deployment in the `mercury` namespace. The existing container is named `cleaner-app`.
+  tasks:
+    - Add a sidecar container named `logger-sidecar` to the deployment's pod spec.
+    - The sidecar should use the `busybox:1.31.0` image.
+    - Both containers must share an `emptyDir` volume. The `cleaner-app` writes logs to this volume, and the `logger-sidecar` should read from it and tail the log file to its standard output.
+
+- id: 16
+  context: You need to provide persistent storage to a Pod using a `PersistentVolume` and `PersistentVolumeClaim`.
+  tasks:
+    - Create a `PersistentVolume` named `earth-project-earthflower-pv` with a capacity of 2Gi, access mode `ReadWriteOnce`, and a `hostPath` of `/tmp/data`. Give it a `storageClassName` of `manual`.
+    - In the `earth` namespace, create a `PersistentVolumeClaim` named `earth-project-earthflower-pvc` that requests 2Gi of storage with `ReadWriteOnce` access and uses the `manual` storage class to bind to the PV.
+    - Create a Pod named `project-earthflower` in the `earth` namespace that uses the `httpd:2.4.41-alpine` image and mounts this PVC at `/tmp/project-data`.
+
+- id: 17
+  context: The `manager-api-svc` service in the `mars` namespace is not routing traffic to its pods. You must troubleshoot and fix the misconfiguration.
+  tasks:
+    - Inspect the service, its endpoints, and the pods it's supposed to target.
+    - Identify the reason the endpoints are not being populated.
+    - Fix the misconfiguration so that the service correctly selects the pods and routes traffic.
+
+- id: 18
+  context: The `my-app` pod has hardcoded environment variables. You must externalize these variables into a ConfigMap.
+  tasks:
+    - Create a ConfigMap named `app-config` with the key/value pairs: `DB_HOST=mysql-svc` and `API_KEY=my-secure-key`.
+    - Modify the `my-app` pod to source its environment variables from this new ConfigMap instead of having them hardcoded.
+
+- id: 19
+  context: An application's deployment is failing because its ServiceAccount lacks permissions to list Pods. The `rbac-app-deploy` deployment in the `rbac-test-lab` namespace uses the `rbac-sa` ServiceAccount.
+  tasks:
+    # CORRECTED: Added explicit names required by the validator.
+    - Create a Role named `pod-reader-role` and a RoleBinding named `rbac-binding`.
+    - The Role should grant `get`, `list`, and `watch` permissions on the `pods` resource.
+    - The RoleBinding should link this Role to the `rbac-sa` ServiceAccount.
+    - Update the deployment to use the `rbac-sa` ServiceAccount and restart it to apply the new permissions.
+
+- id: 20
+  context: In the `ckad-netpol` namespace, a `default-deny-all` NetworkPolicy is blocking all traffic. Your task is to allow specific traffic flows by applying labels. **Note:** Do not modify any NetworkPolicies.
+  tasks:
+    - An existing `allow-all` NetworkPolicy allows traffic to and from any pod with the label `env=newpod`.
+    - Apply the label `env=newpod` to the `web` and `db` pods to allow traffic to and from them.
+
+- id: 21
+  context: A user has provided an `Ingress` resource in the `external` namespace that is not working. Accessing the application URL results in an error. The service is `webapp` on port `8080`.
+  tasks:
+    - The `Ingress` is configured with a `path` of `/path`, but the user wants to access the application at the root of the domain.
+    - Modify the `Ingress` resource to correctly route traffic from the root path (`/`) to the `webapp` service.
