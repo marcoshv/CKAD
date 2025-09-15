@@ -45,22 +45,15 @@ kubectl expose deployment blue --name=web-srv --port=80 --target-port=80 -n tige
 # Q2: NetworkPolicy
 echo "Creating resources for Q2: NetworkPolicy..."
 kubectl create namespace ckad-netpol
-kubectl -n ckad-netpol run web-app --image=nginx --labels="app=web-app"
-kubectl -n ckad-netpol run mysql-db --image=nginx --labels="app=mysql-db"
+# Create four pods
+kubectl -n ckad-netpol run frontend --image=nginx --labels="app=frontend"
+kubectl -n ckad-netpol run backend --image=nginx --labels="app=backend"
+kubectl -n ckad-netpol run database --image=nginx --labels="app=database"
+kubectl -n ckad-netpol run cache --image=nginx --labels="app=cache"
+
+# Apply the four network policies for the scenario
 kubectl apply -f - <<EOF
-apiVersion: v1
-kind: Service
-metadata:
-  name: mysql-db
-  namespace: ckad-netpol
-spec:
-  selector:
-    app: mysql-db
-  ports:
-  - protocol: TCP
-    port: 3306
-    targetPort: 80
----
+# Policy 1: Blocks all traffic by default
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -70,21 +63,57 @@ spec:
   podSelector: {}
   policyTypes: [Ingress, Egress]
 ---
+# Policy 2: The EGRESS policy for the frontend.
+# The user must add 'tier=frontend' to the frontend pod to match this.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-db-access
+  name: frontend-egress-policy
   namespace: ckad-netpol
 spec:
   podSelector:
     matchLabels:
-      app: mysql-db
+      tier: frontend
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - podSelector: {} # Allows egress to anywhere IF this policy is matched
+---
+# Policy 3: The INGRESS policy for the backend.
+# The user must add 'role=api-client' to the frontend pod to match this.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-ingress-policy
+  namespace: ckad-netpol
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
   policyTypes: [Ingress]
   ingress:
   - from:
     - podSelector:
         matchLabels:
-          app: mysql-client
+          role: api-client
+---
+# Policy 4: The INGRESS policy for the cache.
+# The user must add 'access=cache' to the frontend pod to match this.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cache-ingress-policy
+  namespace: ckad-netpol
+spec:
+  podSelector:
+    matchLabels:
+      app: cache
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          access: cache
 EOF
 
 # Q3: Ingress Troubleshooting
@@ -128,14 +157,14 @@ metadata:
   namespace: external
 spec:
   rules:
-  - host: ckad.local
+  - host: ckad.local #<-- This now matches the new prompt
     http:
       paths:
       - path: /app
         pathType: Prefix
         backend:
           service:
-            name: webapp-svc
+            name: webapp-svc #<-- The intentional error
             port:
               number: 8080
 EOF
@@ -245,11 +274,12 @@ echo "Creating resources for Q13: Pod to Deployment..."
 kubectl create namespace pluto
 kubectl run holy-api --image=viktoruj/ping_pong:alpine -n pluto
 
-# Q14: Service & Logs
-echo "Creating resources for Q14: Service & Logs..."
+# Q14: NodePort Service
+echo "Creating resources for Q14: NodePort Service..."
+# The user will expose this pod
+kubectl create namespace pluto
+kubectl run app-14 --image=nginx -n pluto --labels=app=app-14 --port=80
 mkdir -p /opt/course/14
-kubectl create namespace some-random-ns
-kubectl run log-finder-pod-any-ns --image=nginx -n some-random-ns --labels=app_name=log-pod-123
 
 # Q15: Sidecar
 echo "Creating resources for Q15: Sidecar..."
@@ -331,6 +361,12 @@ EOF
 # Q19: RBAC
 echo "Creating resources for Q19: RBAC..."
 kubectl create namespace rbac-test-lab
+
+# Q20: ConfigMap from File
+echo "Creating resources for Q20: ConfigMap from File..."
+kubectl create namespace config-test
+mkdir -p /opt/course/20
+echo "nginx-config-data" > /opt/course/20/ingress_nginx_conf.yaml
 
 # --- LAB CLEANUP SCRIPT ---
 echo "--- Lab setup complete. Here is the cleanup script. ---"

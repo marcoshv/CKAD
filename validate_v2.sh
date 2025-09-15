@@ -21,22 +21,81 @@ echo ""
 
 # --- Q2: NetworkPolicy ---
 echo "--- Q2: Validating Network Policy ---"
-LABEL_CORRECT=$(kubectl get pod web-app -n ckad-netpol -o jsonpath='{.metadata.labels.app}')
-if [ "$LABEL_CORRECT" = "mysql-client" ]; then
-    echo "✅ Success: The 'web-app' pod has the correct label."
+TIER_LABEL=$(kubectl get pod frontend -n ckad-netpol -o jsonpath='{.metadata.labels.tier}')
+ROLE_LABEL=$(kubectl get pod frontend -n ckad-netpol -o jsonpath='{.metadata.labels.role}')
+ACCESS_LABEL=$(kubectl get pod frontend -n ckad-netpol -o jsonpath='{.metadata.labels.access}')
+ACCESS_TO_BACKEND=false
+ACCESS_TO_CACHE=false
+ACCESS_TO_DB_BLOCKED=false
+
+echo "Running connectivity tests for Q2..."
+# Test 1: Frontend to Backend (should succeed)
+BACKEND_IP=$(kubectl get pod backend -n ckad-netpol -o jsonpath='{.status.podIP}')
+if kubectl exec frontend -n ckad-netpol -- curl -s --connect-timeout 2 $BACKEND_IP >/dev/null; then
+    ACCESS_TO_BACKEND=true
+fi
+
+# Test 2: Frontend to Cache (should succeed)
+CACHE_IP=$(kubectl get pod cache -n ckad-netpol -o jsonpath='{.status.podIP}')
+if kubectl exec frontend -n ckad-netpol -- curl -s --connect-timeout 2 $CACHE_IP >/dev/null; then
+    ACCESS_TO_CACHE=true
+fi
+
+# Test 3: Frontend to Database (should fail/timeout)
+DB_IP=$(kubectl get pod database -n ckad-netpol -o jsonpath='{.status.podIP}')
+if ! kubectl exec frontend -n ckad-netpol -- curl -s --connect-timeout 2 $DB_IP >/dev/null; then
+    ACCESS_TO_DB_BLOCKED=true
+fi
+
+if [ "$TIER_LABEL" = "frontend" ] && [ "$ROLE_LABEL" = "api-client" ] && [ "$ACCESS_LABEL" = "cache" ] && [ "$ACCESS_TO_BACKEND" = true ] && [ "$ACCESS_TO_CACHE" = true ] && [ "$ACCESS_TO_DB_BLOCKED" = true ]; then
+    echo "✅ Success: The 'frontend' pod has all correct labels and network access is configured as required."
 else
-    echo "❌ Failure: The 'web-app' pod is missing the correct label."
+    echo "❌ Failure: Validation failed. Check that the 'frontend' pod has all three required labels and that it can reach 'backend' and 'cache' but not 'database'."
 fi
 echo "-------------------------------------"
 echo ""
 
 # --- Q3: Ingress Troubleshooting ---
 echo "--- Q3: Validating Ingress Troubleshooting ---"
+CONFIG_CORRECT=false
+CONNECTION_WORKS=false
+
+# Part 1: Check that the ingress is pointing to the correct service backend
 BACKEND_SERVICE_NAME=$(kubectl get ingress webapp-ingress -n external -o jsonpath='{.spec.rules[0].http.paths[0].backend.service.name}')
 if [ "$BACKEND_SERVICE_NAME" = "webapp" ]; then
-    echo "✅ Success: Ingress is correctly pointing to the 'webapp' service."
+    CONFIG_CORRECT=true
+fi
+
+# Part 2: Functionally test the connection through the ingress
+echo "Testing Ingress connectivity..."
+# Find the Ingress controller's NodePort
+NODE_PORT=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}' 2>/dev/null)
+if [ -z "$NODE_PORT" ]; then
+  # Fallback for different ingress controller names/configs
+  NODE_PORT=$(kubectl get svc -n ingress-nginx -o jsonpath='{.items[0].spec.ports[?(@.nodePort)].nodePort}')
+fi
+
+if [ -n "$NODE_PORT" ]; then
+    # Use a temporary pod to curl the ingress, passing the correct Host header
+    HTTP_STATUS=$(kubectl run tmp-curl --image=busybox --rm -i --restart=Never -- \
+      sh -c "wget --spider --timeout=5 -S -O /dev/null http://127.0.0.1:$NODE_PORT/app --header 'Host: ckad.local' 2>&1 | grep 'HTTP/' | awk '{print \$2}'")
+    
+    if [ "$HTTP_STATUS" = "200" ]; then
+        CONNECTION_WORKS=true
+    fi
+fi
+
+# Final combined validation
+if [ "$CONFIG_CORRECT" = true ] && [ "$CONNECTION_WORKS" = true ]; then
+    echo "✅ Success: Ingress is correctly configured and the application is reachable."
 else
-    echo "❌ Failure: Ingress is pointing to the wrong service backend."
+    echo "❌ Failure: Validation failed. Check the following:"
+    if [ "$CONFIG_CORRECT" = false ]; then
+        echo "  - The Ingress is not pointing to the correct 'webapp' service."
+    fi
+    if [ "$CONNECTION_WORKS" = false ]; then
+        echo "  - The application is not reachable via 'curl http://ckad.local:<nodeport>/app'."
+    fi
 fi
 echo "-------------------------------------"
 echo ""
@@ -178,12 +237,29 @@ fi
 echo "-------------------------------------"
 echo ""
 
-# --- Q14: Service & Logs ---
-echo "--- Q14: Validating Service & Logs ---"
-if [ -f "/opt/course/14/pod.log" ]; then
-    echo "✅ Success: Log file was created."
+# --- Q14: NodePort Service and Logs ---
+echo "--- Q14: Validating NodePort Service and Logs ---"
+SERVICE_CORRECT=false
+FILES_EXIST=false
+
+# Part 1: Check if the service is a correctly configured NodePort
+SVC_TYPE=$(kubectl get service service-14 -n pluto -o jsonpath='{.spec.type}')
+PORT=$(kubectl get service service-14 -n pluto -o jsonpath='{.spec.ports[0].port}')
+TARGET_PORT=$(kubectl get service service-14 -n pluto -o jsonpath='{.spec.ports[0].targetPort}')
+if [ "$SVC_TYPE" = "NodePort" ] && [ "$PORT" -eq 8080 ] && [ "$TARGET_PORT" -eq 80 ]; then
+    SERVICE_CORRECT=true
+fi
+
+# Part 2: Check for the existence of the created files
+if [ -f "/opt/course/14/service.html" ] && [ -f "/opt/course/14/pod.log" ]; then
+    FILES_EXIST=true
+fi
+
+# Final combined validation
+if [ "$SERVICE_CORRECT" = true ] && [ "$FILES_EXIST" = true ]; then
+    echo "✅ Success: NodePort Service is correctly configured and both required files were created."
 else
-    echo "❌ Failure: The log file is missing."
+    echo "❌ Failure: Validation failed. Check the Service type/ports and that both files exist."
 fi
 echo "-------------------------------------"
 echo ""
@@ -287,6 +363,18 @@ if [ "$SA_ASSIGNED" = "pod-sa" ] && [ -n "$ROLE_EXISTS" ] && [ -n "$ROLEBINDING_
     echo "✅ Success: ServiceAccount is assigned and Role/RoleBinding exist."
 else
     echo "❌ Failure: Check that the SA is assigned and the Role/RoleBinding are created."
+fi
+echo "-------------------------------------"
+echo ""
+
+# --- Q20: ConfigMap from File ---
+echo "--- Q20: Validating ConfigMap from File ---"
+FILE_CONTENT=$(kubectl exec -n config-test $(kubectl get pods -n config-test -l app=app-z -o name) -- cat /appConfig/ingress_nginx_conf.yaml)
+EXPECTED_CONTENT=$(cat /opt/course/20/ingress_nginx_conf.yaml)
+if [ "$FILE_CONTENT" = "$EXPECTED_CONTENT" ]; then
+    echo "✅ Success: The ConfigMap was created from the file and correctly mounted as a volume."
+else
+    echo "❌ Failure: The content of the mounted file does not match the source file."
 fi
 echo "-------------------------------------"
 echo ""

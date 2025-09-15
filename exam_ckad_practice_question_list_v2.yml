@@ -12,16 +12,23 @@
     - Ensure the existing service `web-srv` routes traffic to both deployments.
 
 - id: 2
-  context: In the `ckad-netpol` namespace, pod `web-app` needs to communicate with the `mysql-db` service.
+  context: In the `ckad-netpol` namespace, the `frontend` pod is unable to connect to any other pods. Your task is to apply all the necessary labels to it to enable specific traffic flows.
   tasks:
-    - Apply a single label to the `web-app` pod that allows it to communicate with the `mysql-db` service on port 3306.
-    - You must not modify any existing NetworkPolicies.
+    - There are four pods: `frontend`, `backend`, `database`, and `cache`.
+    - There are several existing NetworkPolicies that you must not modify.
+    - Inspect the existing policies to find the three labels that, when applied to the `frontend` pod, will grant it the following permissions:
+    - 1. Permission to send any outgoing (egress) traffic.
+    - 2. Permission to be accepted by the `backend` pod's ingress policy.
+    - 3. Permission to be accepted by the `cache` pod's ingress policy.
+    - Apply all three required labels to the `frontend` pod.
 
 - id: 3
-  context: A user reports they can't access an application at `http://ckad.local/app`. The manifests are in `/opt/course/3/`.
+  context: A user reports they can't access an application at the URL `http://ckad.local:30102/app`. The manifests for the Pod, Service, and Ingress are provided in the `/opt/course/3/` directory.
   tasks:
-    - Inspect `pod.yaml`, `service.yaml`, and `ingress.yaml` to find the error.
-    - Fix the misconfiguration and apply all three manifests in the `external` namespace.
+    - Inspect the manifest files (`pod.yaml`, `service.yaml`, `ingress.yaml`) to find the source of the issue.
+    - Fix the misconfiguration.
+    - Apply the corrected manifests to deploy the application in the `external` namespace.
+    - **Acceptance Criteria:** The solution will be validated by checking that a `curl` to the application URL is successful.
 
 - id: 4
   context: A pod in `log-reader-deploy` (`dev` namespace) fails because its ServiceAccount (`log-reader-sa`) lacks permissions.
@@ -92,11 +99,12 @@
     - Delete the original Pod.
 
 - id: 14
-  context: Find a specific pod and export its logs.
+  context: You need to expose a pod, verify connectivity from within the cluster, and export its logs.
   tasks:
-    - A pod with the label `app_name=log-pod-123` is running in an unknown namespace.
-    - Find the pod's namespace and name.
-    - Export its logs to `/opt/course/14/pod.log`.
+    - Expose the existing pod `app-14` in the `pluto` namespace with a `NodePort` Service named `service-14`.
+    - The service should listen on port `8080` and target the container's port `80`.
+    - Create a temporary `busybox` pod and use `wget` to access the service at `http://service-14.pluto:8080`. Save the output to `/opt/course/14/service.html`.
+    - Export the logs of the `app-14` pod to `/opt/course/14/pod.log`.
 
 - id: 15
   context: The `legacy-app` deployment in `mercury` has two containers (`app1`, `app2`). Add a sidecar to aggregate their logs.
@@ -138,3 +146,10 @@
     - Create a `Role` `pod-sa-role` that allows `get` and `list` on `pods`.
     - Create a `RoleBinding` `pod-sa-roleBinding` to grant `pod-sa` the permissions from `pod-sa-role`.
     - Create a new Pod `rbac-test-pod` that uses this `pod-sa` ServiceAccount.
+
+- id: 20
+  context: You need to make a configuration file available to a new application.
+  tasks:
+    - Create a `ConfigMap` named `config` in the `config-test` namespace from the file `/opt/course/20/ingress_nginx_conf.yaml`.
+    - Create a `Deployment` named `app-z` in the `config-test` namespace with 1 replica using the `viktoruj/ping_pong:alpine` image.
+    - Mount the `config` ConfigMap as a volume to the path `/appConfig` in the deployment's container.
