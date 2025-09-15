@@ -73,7 +73,7 @@
     - After the rollback, scale the deployment to 3 replicas.
 
 - id: 11
-  context: Create a complex CronJob in the `periodic-jobs` namespace.
+  context: Create a complex CronJob in the `periodic-jobs` namespace and then manually trigger it.
   tasks:
     - Create a CronJob named `cron-job1`.
     - It must run every 15 minutes.
@@ -82,7 +82,9 @@
     - Use `concurrencyPolicy: Forbid`.
     - Keep history for the last 5 successful and 7 failed jobs.
     - Terminate the job if it runs longer than 10 seconds (`activeDeadlineSeconds`).
-    - The container must use `viktoruj/ping_pong:alpine` with `imagePullPolicy: IfNotPresent` and run `echo "Hello from CKAD mock"`.
+    - The container must use `viktoruj/ping_pong:alpine` with an `imagePullPolicy` of `IfNotPresent`.
+    - The pods created by the job must have a `restartPolicy` of `OnFailure`.
+    - After creating the CronJob, manually create a new Job named `manual-job-1` from it.
 
 - id: 12
   context: Create a Job named `neb-new-job` in the `neptune` namespace.

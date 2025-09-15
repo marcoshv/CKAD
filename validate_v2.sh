@@ -201,14 +201,26 @@ COMPLETIONS=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.jobT
 BACKOFF=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.jobTemplate.spec.backoffLimit}')
 ACTIVE_DEADLINE=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.jobTemplate.spec.activeDeadlineSeconds}')
 PULL_POLICY=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].imagePullPolicy}')
+RESTART_POLICY=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.jobTemplate.spec.template.spec.restartPolicy}')
 
-if [ "$SCHEDULE" = "*/15 * * * *" ] && [ "$CONCURRENCY" = "Forbid" ] && [ "$SUCCESS_LIMIT" -eq 5 ] && [ "$FAIL_LIMIT" -eq 7 ] && [ "$COMPLETIONS" -eq 3 ] && [ "$BACKOFF" -eq 4 ] && [ "$ACTIVE_DEADLINE" -eq 10 ] && [ "$PULL_POLICY" = "IfNotPresent" ]; then
+if [ "$SCHEDULE" = "*/15 * * * *" ] && \
+   [ "$CONCURRENCY" = "Forbid" ] && \
+   [ "$SUCCESS_LIMIT" -eq 5 ] && \
+   [ "$FAIL_LIMIT" -eq 7 ] && \
+   [ "$COMPLETIONS" -eq 3 ] && \
+   [ "$BACKOFF" -eq 4 ] && \
+   [ "$ACTIVE_DEADLINE" -eq 10 ] && \
+   [ "$PULL_POLICY" = "IfNotPresent" ] && \
+   [ "$RESTART_POLICY" = "OnFailure" ]; then
     CRONJOB_SPEC_CORRECT=true
 fi
-if [ "$CRONJOB_SPEC_CORRECT" = true ]; then
-    echo "✅ Success: CronJob is correctly configured."
+
+MANUAL_JOB_EXISTS=$(kubectl get job manual-job-1 -n periodic-jobs --ignore-not-found=true)
+
+if [ "$CRONJOB_SPEC_CORRECT" = true ] && [ -n "$MANUAL_JOB_EXISTS" ]; then
+    echo "✅ Success: CronJob is correctly configured and the manual Job was created."
 else
-    echo "❌ Failure: Check all CronJob spec fields."
+    echo "❌ Failure: Validation failed. Check all CronJob spec fields and ensure the manual job was created."
 fi
 echo "-------------------------------------"
 echo ""
