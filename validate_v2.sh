@@ -1,6 +1,6 @@
 #!/bin/bash
 # =================================================================
-# CKAD LAB VALIDATION SCRIPT (Final, with New Q10 Logic)
+# CKAD LAB VALIDATION SCRIPT (Definitive Final Version)
 # =================================================================
 
 echo "--- Validating Answers ---"
@@ -8,54 +8,43 @@ echo ""
 
 # --- Q1: Canary Deployment ---
 echo "--- Q1: Validating Canary Deployment ---"
-POD_COUNT=$(kubectl -n tiger get pods -l tier=web --no-headers 2>/dev/null | wc -l)
-SERVICE_ENDPOINTS=$(kubectl get endpoints web-srv -n tiger -o jsonpath='{.subsets[?(@.addresses)].addresses[*].ip}' 2>/dev/null | wc -w)
-
-if [ "$POD_COUNT" -eq 10 ] && [ "$SERVICE_ENDPOINTS" -eq 10 ]; then
+BLUE_REPLICAS=$(kubectl get deployment blue -n tiger -o jsonpath='{.spec.replicas}')
+GREEN_REPLICAS=$(kubectl get deployment main-app-v2 -n tiger -o jsonpath='{.spec.replicas}')
+SERVICE_ENDPOINTS=$(kubectl get endpoints web-srv -n tiger -o jsonpath='{range .subsets[*]}{.addresses[*].ip}{"\n"}{end}' | wc -l)
+if [ "$BLUE_REPLICAS" -eq 7 ] && [ "$GREEN_REPLICAS" -eq 3 ] && [ "$SERVICE_ENDPOINTS" -eq 10 ]; then
     echo "✅ Success: Canary deployment is correctly configured."
 else
-    echo "❌ Failure: Pod count is $POD_COUNT, but expected 10. Endpoints are $SERVICE_ENDPOINTS, but expected 10."
+    echo "❌ Failure: Check replica counts (7/3) and service endpoints (10)."
 fi
 echo "-------------------------------------"
 echo ""
 
-# --- Q2: Network Policy ---
+# --- Q2: NetworkPolicy ---
 echo "--- Q2: Validating Network Policy ---"
-POLICY_EXISTS=$(kubectl get networkpolicy db-policy -n ckad-netpol --ignore-not-found=true)
-DB_POD_IP=$(kubectl -n ckad-netpol get pod -l run=db -o jsonpath='{.items[0].status.podIP}')
-TEST_POD="ckad-netpol-newpod"
-TRAFFIC_IS_BLOCKED=false
-
-if [ -n "$DB_POD_IP" ]; then
-    kubectl -n ckad-netpol exec ${TEST_POD} -- curl -s --connect-timeout 3 ${DB_POD_IP} >/dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        TRAFFIC_IS_BLOCKED=true
-    fi
-fi
-
-if [ -n "$POLICY_EXISTS" ] && [ "$TRAFFIC_IS_BLOCKED" = true ]; then
-    echo "✅ Success: NetworkPolicy 'db-policy' was created and is correctly blocking unwanted traffic."
+LABEL_CORRECT=$(kubectl get pod web-app -n ckad-netpol -o jsonpath='{.metadata.labels.app}')
+if [ "$LABEL_CORRECT" = "mysql-client" ]; then
+    echo "✅ Success: The 'web-app' pod has the correct label."
 else
-    echo "❌ Failure: Ensure a NetworkPolicy named 'db-policy' exists and correctly blocks traffic."
+    echo "❌ Failure: The 'web-app' pod is missing the correct label."
 fi
 echo "-------------------------------------"
 echo ""
 
 # --- Q3: Ingress Troubleshooting ---
 echo "--- Q3: Validating Ingress Troubleshooting ---"
-INGRESS_PATH=$(kubectl get ingress ingress-name -n external -o jsonpath='{.spec.rules[0].http.paths[0].path}' 2>/dev/null)
-if [ "$INGRESS_PATH" = "/" ]; then
-    echo "✅ Success: Ingress path is correctly set to '/'."
+BACKEND_SERVICE_NAME=$(kubectl get ingress webapp-ingress -n external -o jsonpath='{.spec.rules[0].http.paths[0].backend.service.name}')
+if [ "$BACKEND_SERVICE_NAME" = "webapp" ]; then
+    echo "✅ Success: Ingress is correctly pointing to the 'webapp' service."
 else
-    echo "❌ Failure: Ingress path is '$INGRESS_PATH', but expected '/'."
+    echo "❌ Failure: Ingress is pointing to the wrong service backend."
 fi
 echo "-------------------------------------"
 echo ""
 
 # --- Q4: ServiceAccount Permissions ---
 echo "--- Q4: Validating ServiceAccount Permissions ---"
-ROLE_EXISTS=$(kubectl get role pod-reader-role -n dev --ignore-not-found 2>/dev/null)
-ROLEBINDING_EXISTS=$(kubectl get rolebinding log-reader-binding -n dev --ignore-not-found 2>/dev/null)
+ROLE_EXISTS=$(kubectl get role pod-reader-role -n dev --ignore-not-found=true)
+ROLEBINDING_EXISTS=$(kubectl get rolebinding log-reader-binding -n dev --ignore-not-found=true)
 if [ -n "$ROLE_EXISTS" ] && [ -n "$ROLEBINDING_EXISTS" ]; then
     echo "✅ Success: Role and RoleBinding were created."
 else
@@ -64,50 +53,64 @@ fi
 echo "-------------------------------------"
 echo ""
 
-# --- Q5: Export built container images in OCI format. ---
-echo "--- Q5: Validating Image Export (Simulated) ---"
-echo "✅ Success: This is a manual task. Verification passed."
-echo "-------------------------------------"
-echo ""
-
-# --- Q6: Readiness Probe ---
-echo "--- Q6: Validating Readiness Probe ---"
-PROBE_EXISTS=$(kubectl get pod probe-pod -o jsonpath='{.spec.containers[0].readinessProbe}' 2>/dev/null)
-if [ -n "$PROBE_EXISTS" ]; then
-    echo "✅ Success: Readiness probe is configured."
+# --- Q5: Docker Build ---
+echo "--- Q5: Validating Docker Build (Simulated) ---"
+if [ -f "/opt/course/5/ckad.tar" ]; then
+    echo "✅ Success: The file /opt/course/5/ckad.tar was found."
 else
-    echo "❌ Failure: Readiness probe not found in pod manifest."
+    echo "❌ Failure: The file /opt/course/5/ckad.tar was not found."
 fi
 echo "-------------------------------------"
 echo ""
 
-# --- Q7: Resource Requests ---
-echo "--- Q7: Validating Resource Requests ---"
-CPU_REQUEST=$(kubectl get pod nginx-resources -n pod-resources -o jsonpath='{.spec.containers[0].resources.requests.cpu}' 2>/dev/null)
-MEM_REQUEST=$(kubectl get pod nginx-resources -n pod-resources -o jsonpath='{.spec.containers[0].resources.requests.memory}' 2>/dev/null)
-if [ "$CPU_REQUEST" = "200m" ] && [ "$MEM_REQUEST" = "1Gi" ]; then
-    echo "✅ Success: Resource requests are correctly configured."
+# --- Q6: Probes ---
+echo "--- Q6: Validating Probes ---"
+LIVENESS_PROBE=$(kubectl get pod probe-pod -o jsonpath='{.spec.containers[0].livenessProbe.exec.command}')
+READINESS_PROBE=$(kubectl get pod probe-pod -o jsonpath='{.spec.containers[0].readinessProbe.exec.command}')
+if [ -n "$LIVENESS_PROBE" ] && [ -n "$READINESS_PROBE" ]; then
+    echo "✅ Success: Both liveness and readiness probes are configured."
 else
-    echo "❌ Failure: Expected CPU=200m, Memory=1Gi. Found CPU=$CPU_REQUEST, Memory=$MEM_REQUEST."
+    echo "❌ Failure: One or both probes are missing from the pod manifest."
+fi
+echo "-------------------------------------"
+echo ""
+
+# --- Q7: Edit ResourceQuota and Create Pod ---
+echo "--- Q7: Validating ResourceQuota and Pod ---"
+QUOTA_CORRECT=false
+POD_CORRECT=false
+QUOTA_CPU_REQ=$(kubectl get resourcequota pod-resources-quota -n pod-resources -o jsonpath='{.spec.hard.requests\.cpu}')
+QUOTA_MEM_LIM=$(kubectl get resourcequota pod-resources-quota -n pod-resources -o jsonpath='{.spec.hard.limits\.memory}')
+if [ "$QUOTA_CPU_REQ" = "1" ] && [ "$QUOTA_MEM_LIM" = "1Gi" ]; then QUOTA_CORRECT=true; fi
+POD_CPU_REQ=$(kubectl get pod nginx-resources -n pod-resources -o jsonpath='{.spec.containers[0].resources.requests.cpu}')
+POD_MEM_REQ=$(kubectl get pod nginx-resources -n pod-resources -o jsonpath='{.spec.containers[0].resources.requests.memory}')
+POD_CPU_LIM=$(kubectl get pod nginx-resources -n pod-resources -o jsonpath='{.spec.containers[0].resources.limits.cpu}')
+POD_MEM_LIM=$(kubectl get pod nginx-resources -n pod-resources -o jsonpath='{.spec.containers[0].resources.limits.memory}')
+if [ "$POD_CPU_REQ" = "200m" ] && [ "$POD_MEM_REQ" = "256Mi" ] && [ "$POD_CPU_LIM" = "400m" ] && [ "$POD_MEM_LIM" = "512Mi" ]; then POD_CORRECT=true; fi
+
+if [ "$QUOTA_CORRECT" = true ] && [ "$POD_CORRECT" = true ]; then
+    echo "✅ Success: ResourceQuota was edited and the Pod was created correctly."
+else
+    echo "❌ Failure: Check both the ResourceQuota and the Pod's resource spec."
 fi
 echo "-------------------------------------"
 echo ""
 
 # --- Q8: Security Contexts ---
 echo "--- Q8: Validating Security Contexts ---"
-RUNASUSER=$(kubectl get deploy broker-deployment -n quetzal -o jsonpath='{.spec.template.spec.securityContext.runAsUser}' 2>/dev/null)
-ALLOWPRIV=$(kubectl get deploy broker-deployment -n quetzal -o jsonpath='{.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation}' 2>/dev/null)
-if [ "$RUNASUSER" = "30000" ] && [ "$ALLOWPRIV" = "false" ]; then
+RUNASUSER=$(kubectl get deploy broker-deployment -n quetzal -o jsonpath='{.spec.template.spec.securityContext.runAsUser}')
+ALLOWPRIV=$(kubectl get deploy broker-deployment -n quetzal -o jsonpath='{.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation}')
+if [ "$RUNASUSER" = "5000" ] && [ "$ALLOWPRIV" = "false" ]; then
     echo "✅ Success: Security context is correctly configured."
 else
-    echo "❌ Failure: Expected runAsUser=30000 and allowPrivilegeEscalation=false. Found user=$RUNASUSER, allowPrivilege=$ALLOWPRIV"
+    echo "❌ Failure: Check runAsUser and allowPrivilegeEscalation."
 fi
 echo "-------------------------------------"
 echo ""
 
 # --- Q9: Deprecated APIs ---
 echo "--- Q9: Validating Deprecated APIs ---"
-API_VERSION=$(kubectl get deploy www -n cobra -o jsonpath='{.apiVersion}' 2>/dev/null)
+API_VERSION=$(kubectl get deploy www -n cobra -o jsonpath='{.apiVersion}')
 if [ "$API_VERSION" = "apps/v1" ]; then
     echo "✅ Success: API version is correctly updated to 'apps/v1'."
 else
@@ -118,46 +121,55 @@ echo ""
 
 # --- Q10: Rolling Updates ---
 echo "--- Q10: Validating Rolling Updates ---"
-CURRENT_IMAGE=$(kubectl get deploy app-deployment -n kdpd00202 -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null)
-# CORRECTED: This new check looks for the existence of an old ReplicaSet with the updated image.
-# This proves an update was actually performed before the rollback.
-EVIDENCE_OF_UPDATE=$(kubectl get replicaset -n kdpd00202 -l app=app-deployment -o jsonpath='{.items[*].spec.template.spec.containers[?(@.image=="nginx:1.13")].image}' 2>/dev/null)
-
-if [ "$CURRENT_IMAGE" = "nginx:1.12" ] && [ -n "$EVIDENCE_OF_UPDATE" ]; then
-    echo "✅ Success: Deployment was correctly rolled back to the original image after an update."
+REVISION=$(kubectl rollout history deployment/app-deployment -n kdpd00202 --revision=1 2>/dev/null)
+REPLICAS=$(kubectl get deployment app-deployment -n kdpd00202 -o jsonpath='{.spec.replicas}')
+if [ -n "$REVISION" ] && [ "$REPLICAS" -eq 3 ]; then
+    echo "✅ Success: Deployment was rolled back and scaled correctly."
 else
-    echo "❌ Failure: The deployment image is '$CURRENT_IMAGE' (expected 'nginx:1.12') or there is no evidence that an update to nginx:1.13 was performed."
+    echo "❌ Failure: Check the rollback revision and final replica count."
 fi
 echo "-------------------------------------"
 echo ""
 
 # --- Q11: CronJob ---
 echo "--- Q11: Validating CronJob ---"
-CRONJOB_SCHEDULE=$(kubectl get cronjob hello -n periodic-jobs -o jsonpath='{.spec.schedule}' 2>/dev/null)
-if [ "$CRONJOB_SCHEDULE" = "*/1 * * * *" ]; then
-    echo "✅ Success: CronJob is correctly scheduled."
+CRONJOB_SPEC_CORRECT=false
+SCHEDULE=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.schedule}')
+CONCURRENCY=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.concurrencyPolicy}')
+SUCCESS_LIMIT=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.successfulJobsHistoryLimit}')
+FAIL_LIMIT=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.failedJobsHistoryLimit}')
+COMPLETIONS=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.jobTemplate.spec.completions}')
+BACKOFF=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.jobTemplate.spec.backoffLimit}')
+ACTIVE_DEADLINE=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.jobTemplate.spec.activeDeadlineSeconds}')
+PULL_POLICY=$(kubectl get cj cron-job1 -n periodic-jobs -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].imagePullPolicy}')
+
+if [ "$SCHEDULE" = "*/15 * * * *" ] && [ "$CONCURRENCY" = "Forbid" ] && [ "$SUCCESS_LIMIT" -eq 5 ] && [ "$FAIL_LIMIT" -eq 7 ] && [ "$COMPLETIONS" -eq 3 ] && [ "$BACKOFF" -eq 4 ] && [ "$ACTIVE_DEADLINE" -eq 10 ] && [ "$PULL_POLICY" = "IfNotPresent" ]; then
+    CRONJOB_SPEC_CORRECT=true
+fi
+if [ "$CRONJOB_SPEC_CORRECT" = true ]; then
+    echo "✅ Success: CronJob is correctly configured."
 else
-    echo "❌ Failure: CronJob schedule is '$CRONJOB_SCHEDULE', but should be '*/1 * * * *'."
+    echo "❌ Failure: Check all CronJob spec fields."
 fi
 echo "-------------------------------------"
 echo ""
 
 # --- Q12: Job ---
 echo "--- Q12: Validating Job ---"
-COMPLETIONS=$(kubectl get job neb-new-job -n neptune -o jsonpath='{.spec.completions}' 2>/dev/null)
-PARALLELISM=$(kubectl get job neb-new-job -n neptune -o jsonpath='{.spec.parallelism}' 2>/dev/null)
+COMPLETIONS=$(kubectl get job neb-new-job -n neptune -o jsonpath='{.spec.completions}')
+PARALLELISM=$(kubectl get job neb-new-job -n neptune -o jsonpath='{.spec.parallelism}')
 if [ -n "$COMPLETIONS" ] && [ "$COMPLETIONS" -eq 3 ] && [ "$PARALLELISM" -eq 2 ]; then
-    echo "✅ Success: Job is correctly configured for 3 completions and 2 parallelism."
+    echo "✅ Success: Job is correctly configured."
 else
-    echo "❌ Failure: Job has completions='$COMPLETIONS' and parallelism='$PARALLELISM', but expected 3 and 2."
+    echo "❌ Failure: Job spec is incorrect."
 fi
 echo "-------------------------------------"
 echo ""
 
 # --- Q13: Pod to Deployment ---
 echo "--- Q13: Validating Pod to Deployment ---"
-DEPLOYMENT_EXISTS=$(kubectl get deployment holy-api -n pluto --ignore-not-found 2>/dev/null)
-POD_EXISTS=$(kubectl get pod holy-api -n pluto --ignore-not-found 2>/dev/null)
+DEPLOYMENT_EXISTS=$(kubectl get deployment deployment-app-y -n pluto --ignore-not-found=true)
+POD_EXISTS=$(kubectl get pod holy-api -n pluto --ignore-not-found=true)
 if [ -n "$DEPLOYMENT_EXISTS" ] && [ -z "$POD_EXISTS" ]; then
     echo "✅ Success: Pod was successfully converted to a Deployment."
 else
@@ -167,97 +179,114 @@ echo "-------------------------------------"
 echo ""
 
 # --- Q14: Service & Logs ---
-echo "--- Q14: Validating Service & Logs (Simulated) ---"
-SERVICE_CORRECT=false
-SVC_PORT=$(kubectl get service project-plt-6cc-svc -n pluto -o jsonpath='{.spec.ports[0].port}' 2>/dev/null)
-TARGET_PORT=$(kubectl get service project-plt-6cc-svc -n pluto -o jsonpath='{.spec.ports[0].targetPort}' 2>/dev/null)
-if [ -n "$SVC_PORT" ] && [ "$SVC_PORT" -eq 3333 ] && [ "$TARGET_PORT" -eq 80 ]; then
-    SERVICE_CORRECT=true
-fi
-if [ "$SERVICE_CORRECT" = true ]; then
-    echo "✅ Success: Service is correctly configured. (Manual validation needed for log files)."
+echo "--- Q14: Validating Service & Logs ---"
+if [ -f "/opt/course/14/pod.log" ]; then
+    echo "✅ Success: Log file was created."
 else
-    echo "❌ Failure: Check that the service ports are 3333:80."
+    echo "❌ Failure: The log file is missing."
 fi
 echo "-------------------------------------"
 echo ""
 
 # --- Q15: Sidecar ---
 echo "--- Q15: Validating Sidecar ---"
-CONTAINER_COUNT=$(kubectl get deployment cleaner -n mercury -o jsonpath='{range .spec.template.spec.containers[*]}{.name}{"\n"}{end}' 2>/dev/null | wc -l)
-if [ "$CONTAINER_COUNT" -eq 2 ]; then
-    echo "✅ Success: Deployment has two containers, including the sidecar."
+LOGS_WORKING=false
+echo "Waiting for 'legacy-app' pod to be ready..."
+if kubectl wait --for=condition=ready deployment/legacy-app -n mercury --timeout=60s >/dev/null 2>&1; then
+    POD_NAME=$(kubectl get pods -n mercury -l app=legacy-app -o jsonpath='{.items[0].metadata.name}')
+    sleep 5
+    LOGS=$(kubectl logs $POD_NAME -n mercury -c log-aggregator)
+    if echo "$LOGS" | grep -q "App1 log entry" && echo "$LOGS" | grep -q "App2 log entry"; then
+        LOGS_WORKING=true
+    fi
+fi
+if [ "$LOGS_WORKING" = true ]; then
+    echo "✅ Success: The sidecar is aggregating logs from both containers."
 else
-    echo "❌ Failure: Expected 2 containers, but found $CONTAINER_COUNT."
+    echo "❌ Failure: The sidecar is not streaming logs correctly."
 fi
 echo "-------------------------------------"
 echo ""
 
-# --- Q16: PV/PVC ---
-echo "--- Q16: Validating PV/PVC ---"
-PVC_STATUS=$(kubectl get pvc earth-project-earthflower-pvc -n earth -o jsonpath='{.status.phase}' 2>/dev/null)
-if [ "$PVC_STATUS" = "Bound" ]; then
-    echo "✅ Success: PVC is created and bound."
+# --- Q16: Storage ---
+echo "--- Q16: Validating Storage ---"
+PVC_IS_BOUND=$(kubectl get pvc pvc-analytics -n earth -o jsonpath='{.status.phase}')
+POD_IS_CORRECT=false
+INIT_FILE_EXISTS=false
+MOUNTED_PVC_NAME=$(kubectl get pod analytics -n earth -o jsonpath='{.spec.volumes[?(@.persistentVolumeClaim.claimName=="pvc-analytics")].name}')
+NODE_SELECTOR_CORRECT=$(kubectl get pod analytics -n earth -o jsonpath='{.spec.nodeSelector.disk}')
+if [ -n "$MOUNTED_PVC_NAME" ] && [ "$NODE_SELECTOR_CORRECT" = "ssd" ]; then POD_IS_CORRECT=true; fi
+if kubectl exec analytics -n earth -- test -f /pv/analytics/init.txt; then INIT_FILE_EXISTS=true; fi
+
+if [ "$PVC_IS_BOUND" = "Bound" ] && [ "$POD_IS_CORRECT" = true ] && [ "$INIT_FILE_EXISTS" = true ]; then
+    echo "✅ Success: The PVC is bound, the pod is mounting it on the correct node, and the init container ran."
 else
-    echo "❌ Failure: PVC status is '$PVC_STATUS', but expected 'Bound'."
+    echo "❌ Failure: Check PVC binding, pod spec (volume mount, nodeSelector), and initContainer."
 fi
 echo "-------------------------------------"
 echo ""
 
-# --- Q17: Service Troubleshooting ---
+# --- Q1t: Service Troubleshooting ---
 echo "--- Q17: Validating Service Troubleshooting ---"
-ENDPOINTS=$(kubectl get endpoints manager-api-svc -n mars -o jsonpath='{.subsets[?(@.addresses)].addresses}' 2>/dev/null)
-if [ -n "$ENDPOINTS" ]; then
-    echo "✅ Success: Service has endpoints and is routing traffic."
+ENDPOINTS_EXIST=false
+PORT_CORRECT=false
+ENDPOINTS=$(kubectl get endpoints manager-api-svc -n mars -o jsonpath='{.subsets[?(@.addresses)].addresses}')
+if [ -n "$ENDPOINTS" ]; then ENDPOINTS_EXIST=true; fi
+TARGET_PORT=$(kubectl get service manager-api-svc -n mars -o jsonpath='{.spec.ports[0].targetPort}')
+if [ "$TARGET_PORT" -eq 80 ]; then PORT_CORRECT=true; fi
+
+if [ "$ENDPOINTS_EXIST" = true ] && [ "$PORT_CORRECT" = true ]; then
+    echo "✅ Success: Service selector and targetPort were both corrected."
 else
-    echo "❌ Failure: Service has no endpoints. Check the selector."
+    echo "❌ Failure: Check both the service selector and the targetPort."
 fi
 echo "-------------------------------------"
 echo ""
 
-# --- Q18: ConfigMap ---
-echo "--- Q18: Validating ConfigMap ---"
-CONFIGMAP_EXISTS=$(kubectl get configmap app-config --ignore-not-found 2>/dev/null)
-ENV_FROM_EXISTS=$(kubectl get pod my-app -o jsonpath='{.spec.containers[0].envFrom[0].configMapRef.name}' 2>/dev/null)
-if [ -n "$CONFIGMAP_EXISTS" ] && [ "$ENV_FROM_EXISTS" = "app-config" ]; then
-    echo "✅ Success: Pod is using the ConfigMap for environment variables."
+# --- Q18: Secrets ---
+echo "--- Q18: Validating Secrets ---"
+USER_CORRECT=false
+PASS_CORRECT=false
+DB_CORRECT=false
+
+echo "Waiting for 'secret-pod' pod to be ready..."
+if kubectl wait --for=condition=ready pod/secret-pod -n dev-db --timeout=120s >/dev/null 2>&1; then
+    # Check the DB_USER environment variable
+    USER_VALUE=$(kubectl exec secret-pod -n dev-db -- printenv DB_USER | tr -d '\r')
+    if [ "$USER_VALUE" = "admin" ]; then
+        USER_CORRECT=true
+    fi
+    
+    # Check the MYSQL_ROOT_PASSWORD environment variable
+    PASS_VALUE=$(kubectl exec secret-pod -n dev-db -- printenv MYSQL_ROOT_PASSWORD | tr -d '\r')
+    if [ "$PASS_VALUE" = "supersecret123" ]; then
+        PASS_CORRECT=true
+    fi
+
+    # Check the DB_NAME environment variable
+    DB_VALUE=$(kubectl exec secret-pod -n dev-db -- printenv DB_NAME | tr -d '\r')
+    if [ "$DB_VALUE" = "prod-db" ]; then
+        DB_CORRECT=true
+    fi
+fi
+
+if [ "$USER_CORRECT" = true ] && [ "$PASS_CORRECT" = true ] && [ "$DB_CORRECT" = true ]; then
+    echo "✅ Success: Pod is correctly consuming all 3 keys from the Secret as environment variables."
 else
-    echo "❌ Failure: ConfigMap not found or pod is not configured to use it."
+    echo "❌ Failure: Validation failed. Check that DB_USER, MYSQL_ROOT_PASSWORD, and DB_NAME env variables are correctly sourced from the 'db-credentials' secret."
 fi
 echo "-------------------------------------"
 echo ""
 
-# --- Q19: ServiceAccount Permissions ---
-echo "--- Q19: Validating ServiceAccount Permissions ---"
-ROLE_EXISTS=$(kubectl get role pod-reader-role -n rbac-test-lab --ignore-not-found 2>/dev/null)
-ROLEBINDING_EXISTS=$(kubectl get rolebinding rbac-binding -n rbac-test-lab --ignore-not-found 2>/dev/null)
-if [ -n "$ROLE_EXISTS" ] && [ -n "$ROLEBINDING_EXISTS" ]; then
-    echo "✅ Success: Role and RoleBinding were created in the rbac-test-lab namespace."
+# --- Q19: RBAC ---
+echo "--- Q19: Validating RBAC ---"
+SA_ASSIGNED=$(kubectl get pod rbac-test-pod -n rbac-test-lab -o jsonpath='{.spec.serviceAccountName}')
+ROLE_EXISTS=$(kubectl get role pod-sa-role -n rbac-test-lab --ignore-not-found=true)
+ROLEBINDING_EXISTS=$(kubectl get rolebinding pod-sa-roleBinding -n rbac-test-lab --ignore-not-found=true)
+if [ "$SA_ASSIGNED" = "pod-sa" ] && [ -n "$ROLE_EXISTS" ] && [ -n "$ROLEBINDING_EXISTS" ]; then
+    echo "✅ Success: ServiceAccount is assigned and Role/RoleBinding exist."
 else
-    echo "❌ Failure: Check if the Role and RoleBinding exist in the rbac-test-lab namespace."
-fi
-echo "-------------------------------------"
-echo ""
-
-# --- Q20: Network Policy ---
-echo "--- Q20: Validating Network Policy Labels ---"
-WEB_LABEL=$(kubectl get pod web -n ckad-netpol -o jsonpath='{.metadata.labels.env}' 2>/dev/null)
-DB_LABEL=$(kubectl get pod db -n ckad-netpol -o jsonpath='{.metadata.labels.env}' 2>/dev/null)
-if [ "$WEB_LABEL" = "newpod" ] && [ "$DB_LABEL" = "newpod" ]; then
-    echo "✅ Success: 'web' and 'db' pods have the correct label 'env=newpod'."
-else
-    echo "❌ Failure: The 'web' or 'db' pod is missing the 'env=newpod' label."
-fi
-echo "-------------------------------------"
-echo ""
-
-# --- Q21: Ingress Troubleshooting ---
-echo "--- Q21: Validating Ingress Troubleshooting ---"
-INGRESS_PATH=$(kubectl get ingress ingress-name -n external -o jsonpath='{.spec.rules[0].http.paths[0].path}' 2>/dev/null)
-if [ "$INGRESS_PATH" = "/" ]; then
-    echo "✅ Success: The ingress path is correctly set to '/'."
-else
-    echo "❌ Failure: The ingress path is '$INGRESS_PATH', but expected '/'."
+    echo "❌ Failure: Check that the SA is assigned and the Role/RoleBinding are created."
 fi
 echo "-------------------------------------"
 echo ""
