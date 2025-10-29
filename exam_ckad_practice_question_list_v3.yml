@@ -1,0 +1,181 @@
+# =================================================================
+# CKAD Exam Practice Questions (Definitive Final Version)
+# =================================================================
+
+- id: 1
+  context: A deployment named `blue` (10 replicas) is running. Create a canary deployment for a new version.
+  tasks:
+    - "The new version should handle 20% of the traffic, and the total number of pods must be 10."
+    - "This means you must scale the existing `blue` deployment to 8 replicas and create a new deployment `canary-v2` with 2 replicas."
+    - "The `canary-v2` deployment must use the image `nginx:1.27.0`."
+    - "The new `canary-v2` deployment's pods must have the labels `app: canary-v2` and `tier: web`."
+    - "Ensure the existing service `web-srv` in the `tiger` namespace routes traffic to both deployments."
+
+- id: 2
+  context: In the `ckad-netpol` namespace, the `frontend` pod is unable to connect to any other pods.
+  tasks:
+    - "There are four pods: `frontend`, `backend`, `database`, and `cache`, and several existing NetworkPolicies that you must not modify."
+    - "Inspect the policies to find the three labels that, when applied to the `frontend` pod, will grant it egress traffic and allow it to be accepted by the `backend` and `cache` pods' ingress policies."
+    - "Apply all three required labels to the `frontend` pod."
+
+- id: 3
+  context: An application is not accessible. The manifests are in `/opt/course/3/`. The cluster uses the 'nginx' IngressClass.
+  tasks:
+    - "The provided `ingress.yaml` is broken in two ways: it's missing the `ingressClassName` and it points to the wrong service."
+    - "A third problem is that the path prefix `/app` is not being stripped."
+    - "Fix all three misconfigurations in the `ingress.yaml` file by editing it directly."
+    - "Apply all three manifests (`pod.yaml`, `service.yaml`, and the corrected `ingress.yaml`)."
+    - "After fixing the Ingress, modify it further. Add a new rule to route traffic from the path /status (with pathType: Prefix) to a different, existing service named health-check-srv on port 8081."
+
+- id: 4
+  context1: A pod in `log-reader-deploy` (`dev` namespace) fails because its ServiceAccount (`log-reader-sa`) lacks permissions.
+  tasks 1:
+    - Before creating the Role, inspect the logs of the failing pod in the `log-reader-deploy` deployment. 
+    - Use the `--previous` flag to see the logs from the last terminated container and save the output to `/opt/course/4/failing-pod.log`."
+    - "Create a Role `pod-reader-role` and RoleBinding `log-reader-binding`."
+    - "Grant the `log-reader-sa` ServiceAccount `get` and `list` permissions on `pods`."
+  context2: A second deployment, metrics-scraper-deploy, is also failing due to permissions. However, a correctly permissioned ServiceAccount already exists in the dev namespace.
+  tasks 2:
+    - "Investigate the existing Roles and RoleBindings to identify the ServiceAccount that has get and list permissions on pods."
+    - "Edit the metrics-scraper-deploy deployment to use this correct, pre-existing ServiceAccount."
+
+- id: 5
+  context: A Dockerfile is at `/opt/course/5/Dockerfile`. Docker is installed.
+  tasks:
+    - "Build an image named `ckad` with tag `0.0.1`."
+    - "Export the image in `oci-archive` format to `/opt/course/5/ckad.tar`."
+
+- id: 6
+  context: The existing pod `probe-pod` needs health checks.
+  tasks:
+    - "Add a `livenessProbe` that executes the command `ls /tmp/healthy`."
+    - "Add a `readinessProbe` that executes `touch /tmp/ready; cat /tmp/ready`."
+    - "Both probes should start after a 10-second delay and run every 60 seconds."
+    - "After adding the probes, use `kubectl top pod` to find the CPU and memory usage of the `probe-pod`. Append this information to a file at `/opt/course/6/pod_metrics.txt`."
+
+- id: 7
+  context: The "pod-resources" namespace has a restrictive ResourceQuota and an active LimitRange that need to be adjusted to accommodate new workloads.
+  tasks:
+    - "First, edit the ResourceQuota named pod-resources-quota. Increase its total requests.cpu by a factor of 10 and its total limits.memory by a factor of 8."
+    - "Then, create a new pod named nginx-resources with the image nginx:alpine. Configure this pod with a CPU limit of 400m and a memory limit of 512Mi. For this pod, the CPU and memory requests must be set to exactly 50% of their corresponding limits."
+    - "Next, create another pod named nginx-defaults with the image nginx:alpine. This pod should not specify a memory request, allowing the LimitRange to apply its default value. It should, however, request 100m of CPU."
+    - "After that, edit the LimitRange named pod-resources-lr to enforce a maximum CPU and memory limit for any new container. These maximum values must be equal to the limits you defined for the nginx-resources pod."
+    - "Finally, verify your LimitRange change is working. Attempt to create a new pod named nginx-too-big with the image nginx:alpine and with a CPU limit that is 150% of the new maximum. This final pod creation is expected to fail."
+
+- id: 8
+  context: The existing `broker-deployment` in the `quetzal` namespace needs its security hardened and must be enhanced with a log-shipping sidecar.
+  tasks:
+    - "First, apply a strict security context to the pods in the deployment:"
+    - "Configure the pods to run with user ID `5000` (`runAsUser`)."
+    - "In the main container, forbid privilege escalation (`allowPrivilegeEscalation: false`)."
+    - "In the main container, drop all default Linux capabilities and then add back only the `NET_BIND_SERVICE` capability."
+    - "Next, enhance the deployment with a sidecar:"
+    - "The main container (`redis`) must be modified to **run a command that appends the current date to `/var/log/redis.log` every 5 seconds**."
+    - "Add sidecar container named `log-shipper` using the `busybox:1.36` image that **runs the command `tail -F /var/log/redis.log`**."
+    - "Ensure both the main container and the new sidecar share an `emptyDir` volume **named `log-volume` mounted at the path `/var/log`**."
+
+- id: 9
+  context: A manifest at `/opt/course/9/www.yaml` has a deprecated apiVersion.
+  tasks:
+    - "Fix the API version and deploy it in the `cobra` namespace."
+    - "After deploying the corrected manifest, create a `kustomization.yaml` file in the `/opt/course/9/` directory. This file should reference `www.yaml` as a resource."
+    - "Create a patch file named `replica-patch.yaml` in the `/opt/course/9/` directory. This patch should change the number of replicas for the deployment to 3."
+    - "Add the `replica-patch.yaml` file to the `patchesStrategicMerge` list in your `kustomization.yaml`."
+    - "Use `kustomize build` piped into `kubectl apply` to apply the final customized configuration (including the replica change) to the cluster."
+
+- id: 10
+  context: Manage the rollout of `app-deployment` in the `kdpd00202` namespace.
+  tasks:
+    - "First, edit the deployment's rolling update strategy. Set `maxUnavailable` to `30%` and `maxSurge` to `30%`."
+    - "Next, trigger a new rollout by setting the container's image to `nginx:1.27.0`."
+    - "After the update is complete, roll back the deployment to revision 1 and then scale it to 3 replicas."
+    - "Create a `HorizontalPodAutoscaler` named `app-hpa` to target the `app-deployment`. The HPA should maintain a minimum of 2 replicas and a maximum of 5, scaling up when CPU utilization exceeds 75%."
+    - "Using Helm, install the `bitnami/redis` chart with the release name `redis-cache` into the `kdpd00202` namespace. Ensure you set the `replica.replicaCount` to `1` during installation."
+
+
+- id: 11
+  context: Create a complex, resilient CronJob in the `periodic-jobs` namespace.
+  tasks:
+    - "Create a CronJob named `my-cronjob` that uses the `busybox` image."
+    - "It must run every 30 minutes."
+    - "If a job misses its scheduled time by more than 200 seconds, it should be skipped (set `startingDeadlineSeconds`)."
+    - "Keep the history for the last 10 successful and 5 failed job runs."
+    - "Ensure that if a previous job is still running, a new one is not started (set `concurrencyPolicy` to `Forbid`)."
+    - "Configure the job template so that pods will retry up to 2 times on failure (set `backoffLimit`)."
+    - "Ensure the pods' `restartPolicy` is set to `OnFailure`."
+    - "The container should execute the command: `sh -c 'echo \"Daily cleanup task complete\" && date'`."
+    - "Finally, manually create a Job named `my-cronjob-manual` from the `my-cronjob` CronJob."
+
+- id: 12
+  context: Create a Job named `neb-new-job` in the `neptune` namespace.
+  tasks:
+    - "Run `sleep 2 && echo done` with the `busybox:1.31.0` image."
+    - "The Job must have 3 completions and a parallelism of 2."
+
+- id: 13
+  context: Convert the Pod `holy-api` in `pluto` namespace to a Deployment.
+  tasks:
+    - "Create a Deployment named `deployment-app-y` from the pod."
+    - "It should have 1 replica and an env var `SERVER_NAME=app-y`."
+    - "The container security context must set `allowPrivilegeEscalation: false` and `privileged: false`."
+    - "Delete the original Pod."
+
+- id: 14
+  context: You need to expose a pod, verify connectivity from within the cluster, and export its logs.
+  tasks:
+    - "Expose the existing pod `app-14` in the `pluto` namespace with a `NodePort` Service named `service-14`."
+    - "The service should listen on port `8080` and target the container's port `80`."
+    - "Create a temporary `busybox` pod and use `curl` to access the service at `http://service-14.pluto:8080`. Save the output to `/opt/course/14/service.html`."
+    - "Export the logs of the `app-14` pod to `/opt/course/14/pod.log`."
+    - "Create a second service in the `pluto` namespace named `external-api`. This service must be of type `ExternalName` and should point to the FQDN `api.externalservice.io`."
+
+- id: 15
+  context: Create a multi-container pod where a main application writes logs and an `nginx` sidecar serves them over HTTP.
+  tasks:
+    - "In the `mercury` namespace, create a `ConfigMap` named `nginx-config` from the file `/opt/course/15/index.html`."
+    - "Create a pod named `log-pod`. It must have two containers: `log-writer` and `log-server`."
+    - "The `log-writer` (`busybox` image) must write the current date to `/var/log/app/log.txt` every second."
+    - "The `log-server` (`nginx:alpine` image) must serve content from that directory."
+    - "The containers must share an `emptyDir` volume named `log-volume` mounted at `/var/log/app` (`log-writer`) and `/usr/share/nginx/html` (`log-server`)."
+    - "The `log-server` must also use the `nginx-config` ConfigMap to mount the `index.html` file."
+
+- id: 16
+  context: Provide persistent storage to a Pod and ensure it runs on the correct node.
+  tasks:
+    - "Create a `PersistentVolume` `pv-analytics` (100Mi, `ReadWriteOnce`, `hostPath: /pv/data`)."
+    - "In `earth` namespace, create a `PersistentVolumeClaim` `pvc-analytics` requesting 100Mi."
+    - "Create a Pod `analytics` that mounts the PVC at `/data` and uses the `busybox` image."
+    - "The pod must run on a node with the label `disk=ssd`."
+    - "The pod must have an `initContainer` (also `busybox` image) that writes 'Initialized' to a file at `/data/init.txt` in the volume."
+
+- id: 17
+  context: A `NodePort` service `manager-api-svc` in `mars` is not working. It has two configuration errors.
+  tasks:
+    - "Troubleshoot and fix the selector mismatch."
+    - "Troubleshoot and fix the targetPort mismatch."
+
+- id: 18
+  context: A pod named `secret-pod` in the `dev-db` namespace has sensitive data hardcoded.
+  tasks:
+    - "Create a new Secret named `db-credentials` in the `dev-db` namespace."
+    - "The secret must contain three keys: `user` (value: `admin`), `dbname` (value: `prod-db`), and `pass` (value: `supersecret123`)."
+    - "Modify the `secret-pod` to remove the hardcoded environment variables."
+    - "Configure the pod to source its `DB_USER` env var from the `user` key."
+    - "Configure its `MYSQL_ROOT_PASSWORD` env var from the `pass` key."
+    - "Configure its `DB_NAME` env var from the `dbname` key."
+    - "Additionally, make the `pass` key available as a file named `password.txt` inside the container at the path `/etc/mysql/`."
+
+- id: 19
+  context: In the `rbac-test-lab` namespace, grant permissions to a new `ServiceAccount`.
+  tasks:
+    - "Create a `ServiceAccount` named `pod-sa`."
+    - "Create a `Role` `pod-sa-role` that allows `get` and `list` on `pods`."
+    - "Create a `RoleBinding` `pod-sa-roleBinding` to grant `pod-sa` the permissions from `pod-sa-role`."
+    - "Create a new Pod `rbac-test-pod` that uses this `pod-sa` ServiceAccount and the `busybox` image."
+
+- id: 20
+  context: You need to make a configuration file available to a new application.
+  tasks:
+    - "Create a `ConfigMap` named `config` in the `config-test` namespace from the file `/opt/course/20/ingress_nginx_conf.yaml`."
+    - "Create a `Deployment` named `app-z` in `config-test` with 1 replica using `viktoruj/ping_pong:alpine`."
+    - "Mount the `config` ConfigMap as a volume to the path `/appConfig` in the deployment's container."
